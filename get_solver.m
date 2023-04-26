@@ -1,4 +1,4 @@
-function solver = get_solver(N)
+function solver = get_solver(N, type)
     import casadi.*
 
     % Rate constants
@@ -21,11 +21,41 @@ function solver = get_solver(N)
     A = [-(kE+k21), k21;k12, -k12];
     B = [kU; SX(1,1)];
     
-    % Define Dynamics by Forward Euler
-    x_all = [SX(1,2); x];
-    dxs = A*x_all(1:N-1,:)' + B*u';
+    % Define Dynamics
     dt = t(2:end)-t(1:end-1);
-    x_next = (x_all(1:N-1,:)'+dxs*diag(dt))';
+    x_all = [SX(1,2); x];
+    if strcmp(type, 'ForwardEuler')
+        dxs = A*x_all(1:N-1,:)' + B*u';
+        x_next = (x_all(1:N-1,:)'+dxs*diag(dt))';
+    elseif strcmp(type, 'Exact')
+        % Check if functions are saved
+        if ~isfile('exactA.m') || ~isfile('exactA.m')
+            % Compute discretizations symbolicly
+            syms skE skU sk12 sk21 sT real positive
+            sA = [-(skE+sk21), sk21;sk12, -sk12];
+            sB = [skU; 0];
+
+            sAd = simplify(expm(sA*sT));
+            sBd = simplify(inv(sA)*(sAd-eye(2))*sB);
+
+            % create functions for symbolic results
+            fAd = matlabFunction(sAd, 'file', 'exactA',...
+                                 'Vars',[skU, skE, sk12, sk21, sT]);
+            fBd = matlabFunction(sBd, 'file', 'exactB',...
+                                 'Vars',[skU, skE, sk12, sk21, sT]);
+        else
+            fAd = @exactA;
+            fBd = @exactB;
+        end
+        
+        x_next = SX(N-1, 2);
+        for i = 1:N-1
+            Ad = fAd(kU, kE, k12, k21, dt(i));
+            Bd = fBd(kU, kE, k12, k21, dt(i));
+            
+            x_next(i, :) = (Ad*x_all(i, :)' + Bd*u(i))';
+        end
+    end
     
     % Pass Dynamics as equality constraints;
     res_eq = x_next-x;

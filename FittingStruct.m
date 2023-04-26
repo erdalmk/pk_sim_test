@@ -4,11 +4,13 @@ classdef FittingStruct
        inj
        data
        nlp_solver
+       type
    end
    methods
-      function obj = FittingStruct(t, u, y)
-
-          if nargin~=3
+      function obj = FittingStruct(t, u, y, type)
+          if nargin == 3
+              type = 'ForwardEuler';
+          elseif nargin~=4
               error('Not enough inputs!')
           end
           % remove duplicate times
@@ -16,7 +18,7 @@ classdef FittingStruct
           obj.time = time;
           obj.inj = u(ind_unique);
           obj.data = y(ind_unique, :);
-          obj.nlp_solver = get_solver(length(time));
+          obj.nlp_solver = get_solver(length(time), type);
       end
       function sol_struct = fit_nlp(obj, init_struct)
           kU_init = init_struct.kU;
@@ -72,7 +74,7 @@ classdef FittingStruct
           sol_struct.stats = solver.stats;
 
           sol_struct.kU = kU_sol;
-          sol_struct.kE = kE_sol;
+          sol_struct.ke_Central = kE_sol;
           sol_struct.k12 = k12_sol;
           sol_struct.k21 = k21_sol;
           sol_struct.invsig1 = invsig1_sol;

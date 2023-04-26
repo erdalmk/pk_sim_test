@@ -9,7 +9,7 @@ true_params.ke_Central = 3e-2;  % 1/min
 [time, u, y_conc, x_conc] = get_data(true_params);
 
 %% Get Fitting Structure
-fitObj = FittingStruct(time, u, y_conc);
+fitObj = FittingStruct(time, u, y_conc, 'Exact');
 
 %% Run Solver
 % Initial Values
@@ -30,22 +30,39 @@ init_vals.invsig2 = 1e1;
 
 sol_nlp = fitObj.fit_nlp(init_vals);
 
-%% Plot simulated response
-figure
-plot(time, y_conc, '.')
+%% Display Results
+% Plot simulated response
+figure('Units', 'normalized', 'OuterPosition', [0.1, 0.1, 0.4, 0.8])
+subplot(3,1,1:2)
+plot(time, y_conc, '.', 'MarkerSize',8)
 hold on
-set(gca,'ColorOrderIndex',1)
-plot(time, x_conc)
-plot(fitObj.time, sol_nlp.x)
-ylabel('Concentration (\mu M)')
+plot(fitObj.time, sol_nlp.x, 'Color', .7*[0,1,0], 'LineWidth',2)
+xlim(time([1, end]))
 
-yyaxis right
-stairs(time, u, 'r')
+legend('data','fit')
+
+ylabel('Concentration (\mu M)')
+xlabel('Time (min)')
+
+set(gca,'TickDir', 'out', 'box', 'off')
+
+subplot(3,1,3)
+stairs(time, u, 'm')
 ylabel('Injection Rate (\mu mol/min)')
 
 xlim(time([1, end]))
 xlabel('Time (min)')
 
-ax = gca;
-ax.YAxis(2).Color = 'r';
-set(ax,'TickDir', 'out', 'box', 'off')
+set(gca,'TickDir', 'out', 'box', 'off')
+
+% Show estimated parameters against true parameters
+T = table;
+T.parameter = fields(true_params);
+T.true = zeros(4, 1);
+T.estimated = zeros(4, 1);
+for i = 1:4
+    T.true(i) = true_params.(T.parameter{i});
+    T.estimated(i) = sol_nlp.(T.parameter{i});
+end
+disp(T)
+
