@@ -39,7 +39,7 @@ hold on
 plot(fitObj.time, sol_nlp.x, 'Color', .7*[0,1,0], 'LineWidth',2)
 xlim(time([1, end]))
 
-legend('data','fit')
+legend('data central','data peripheral','fit')
 
 ylabel('Concentration (\mu M)')
 xlabel('Time (min)')
