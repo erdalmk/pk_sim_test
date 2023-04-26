@@ -1,4 +1,4 @@
-function [time, y_conc, x_conc] = get_data(true_params)
+function [time, injs, y_conc, x_conc] = get_data(true_params)
     %% Create a two compartment model structure
     pk_construct = PKModelDesign;
     
@@ -43,21 +43,26 @@ function [time, y_conc, x_conc] = get_data(true_params)
     configset = getconfigset(modelObj);
     configset.CompileOptions.UnitConversion = true;
     configset.TimeUnits = 'minute';
-    configset.StopTime = 600;
+    configset.StopTime = 400;
     
     %% Set Dose Specs
     doseObj = adddose(modelObj,'InfusionDose');
     doseObj.TargetName = 'Drug_Central';
     doseObj.StartTime = 20;
     doseObj.Amount = 10;
-    doseObj.Rate = 1;
+    doseObj.Rate = 0.5;
     doseObj.AmountUnits = 'micromole';
     doseObj.TimeUnits = 'minute';
     doseObj.RateUnits = 'micromole/minute';
     
     %% Simulate model and add noise
-    % Simulate
+    % Simulate and create injections vector
     [time, x_conc, ~] = sbiosimulate(modelObj, doseObj);
+    injection_length = doseObj.Amount/doseObj.Rate;
+    injs = zeros(size(time));
+    nnz_inj = time>=doseObj.StartTime &...
+              time<=doseObj.StartTime+injection_length;
+    injs(nnz_inj) = doseObj.Rate;
     
     % Add noise of particular SNR
     SNR = 50;
