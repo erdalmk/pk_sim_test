@@ -1,4 +1,4 @@
-function [time, injs, y_conc, x_conc] = get_data(true_params)
+function [time, injs, y_conc, x_conc] = get_data(true_params, config)
     %% Create a two compartment model structure
     pk_construct = PKModelDesign;
     
@@ -51,24 +51,39 @@ function [time, injs, y_conc, x_conc] = get_data(true_params)
     doseObj.StartTime = 20;
     doseObj.Amount = 10;
     doseObj.Rate = 0.5;
+    doseObj.Interval = 120;
+    doseObj.RepeatCount = config.repeat_count-1;
     doseObj.AmountUnits = 'micromole';
     doseObj.TimeUnits = 'minute';
     doseObj.RateUnits = 'micromole/minute';
     
     %% Simulate model and add noise
     % Simulate and create injections vector
-    [time, x_conc, ~] = sbiosimulate(modelObj, doseObj);
+    simdata = sbiosimulate(modelObj, doseObj);
+    if config.uniform_sampling
+        Tsample = config.sampling_time;
+        time = (0:Tsample:configset.StopTime)';
+        newSimData = resample(simdata,time, 'spline');
+        x_conc = newSimData.Data;
+    else
+        time = simdata.Time;
+        x_conc = simdata.Data;
+    end
+    
     injection_length = doseObj.Amount/doseObj.Rate;
     injs = zeros(size(time));
-    nnz_inj = time>=doseObj.StartTime &...
-              time<=doseObj.StartTime+injection_length;
-    injs(nnz_inj) = doseObj.Rate;
+    start_times = doseObj.StartTime+(0:doseObj.RepeatCount)*doseObj.Interval;
+    for i=1:length(start_times)
+        nnz_inj = time>=start_times(i) &...
+                  time<=start_times(i)+injection_length;
+        injs(nnz_inj) = doseObj.Rate;
+    end
     
     % Add noise of particular SNR
-    SNR = 50;
+    SNR = 30;
     rng(1)
     noise = normrnd(0, 1, size(x_conc));
     
-    sig_pow = sqrt(diag(x_conc'*x_conc));
-    y_conc = x_conc+noise*diag(sig_pow/SNR);
+    sig_pow = diag(x_conc'*x_conc)/size(x_conc, 1);
+    y_conc = x_conc+noise*sqrt(diag(sig_pow/SNR));
 end

@@ -5,11 +5,19 @@ true_params.Peripheral = 3e-2;  % L
 true_params.Q12 = 3e-4;         % L/min
 true_params.ke_Central = 3e-2;  % 1/min
 
+%% Set Simulation and Fitting Parameters
+sim_config = struct;
+sim_config.uniform_sampling = false;
+sim_config.sampling_time = 0.5; % ignored if uniform_sampling is false
+sim_config.repeat_count = 2;
+
+fitting_type = 'Exact';  % can be ForwardEuler or Exact
+
 %% Get Simulated Data
-[time, u, y_conc, x_conc] = get_data(true_params);
+[time, u, y_conc, x_conc] = get_data(true_params, sim_config);
 
 %% Get Fitting Structure
-fitObj = FittingStruct(time, u, y_conc, 'Exact');
+fitObj = FittingStruct(time, u, y_conc, fitting_type);
 
 %% Run Solver
 % Initial Values
@@ -56,6 +64,7 @@ xlabel('Time (min)')
 set(gca,'TickDir', 'out', 'box', 'off')
 
 % Show estimated parameters against true parameters
+
 T = table;
 T.parameter = fields(true_params);
 T.true = zeros(4, 1);

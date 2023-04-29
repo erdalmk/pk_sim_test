@@ -18,6 +18,7 @@ classdef FittingStruct
           obj.time = time;
           obj.inj = u(ind_unique);
           obj.data = y(ind_unique, :);
+          obj.type = type;
           obj.nlp_solver = get_solver(length(time), type);
       end
       function sol_struct = fit_nlp(obj, init_struct)
@@ -58,6 +59,29 @@ classdef FittingStruct
                        'ubx',ubx_val,...
                        'lbg',lbg_val,...
                        'ubg',ubg_val);
+                   
+          % get hessian based on laplace integral
+          fhess = solver.get_function('nlp_hess_l');
+          hess_upper = full(fhess(sol.x, p_val, 1 , sol.lam_g));
+          hess_l = hess_upper + triu(hess_upper, 1)';
+
+          fjac_g = solver.get_function('nlp_jac_g');
+          [~, jac_g_sparse] = fjac_g(sol.x, p_val);
+          jac_gx = full(jac_g_sparse);
+          hess_all = [hess_l, jac_gx';...
+                      jac_gx, zeros(size(jac_gx, 1))];
+          n_params = size(jac_gx, 2) - size(jac_gx, 1);
+
+          mat2sol = [eye(n_params);zeros(size(hess_all, 1)-n_params, n_params)];
+          sol_cov = hess_all\mat2sol;
+          cov = sol_cov(1:n_params,:);
+           
+          % save confidence intervals
+          sigs = sqrt(diag(cov));
+          T_sol = table;
+          T_sol.names = {'kU';'kE';'k12';'k21';'invsig1';'invsig2'};
+          T_sol.x = full(sol.x(1:6));
+          T_sol.CI = 1.96*sigs;
           
           % parse solution
           kU_sol = full(sol.x(1));
@@ -70,6 +94,7 @@ classdef FittingStruct
                    reshape(full(sol.x(7:end)), N-1, 2)];
 
           sol_struct = struct;
+          sol_struct.p = p_val;
           sol_struct.sol = sol;
           sol_struct.stats = solver.stats;
 
@@ -84,6 +109,9 @@ classdef FittingStruct
           sol_struct.Peripheral = (k21_sol/kU_sol)/k12_sol;
           sol_struct.Q12 = k21_sol/kU_sol;
           sol_struct.x = x_sol;
+          
+          sol_struct.cov = cov;
+          sol_struct.TCI = T_sol;
       end
    end
 end
