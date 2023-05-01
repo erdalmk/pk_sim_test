@@ -7,47 +7,55 @@ classdef FittingStruct
        type
    end
    methods
-      function obj = FittingStruct(t, u, y, type)
-          if nargin == 3
-              type = 'ForwardEuler';
-          elseif nargin~=4
-              error('Not enough inputs!')
-          end
+      function obj = FittingStruct(t, u, y, disc_type, elim_type)
           % remove duplicate times
           [time, ind_unique, ~] = unique(t);
           obj.time = time;
           obj.inj = u(ind_unique);
           obj.data = y(ind_unique, :);
-          obj.type = type;
-          obj.nlp_solver = get_solver(length(time), type);
+          obj.type = {disc_type, elim_type};
+          obj.nlp_solver = get_solver(length(time), disc_type, elim_type);
       end
       function sol_struct = fit_nlp(obj, init_struct)
+          % Get Rate initializations
           kU_init = init_struct.kU;
           kE_init = init_struct.kE;
           k12_init = init_struct.k12;
           k21_init = init_struct.k21;
+          
+          rates_init = [kU_init;kE_init;k12_init;k21_init];
+                    
+          % Get Variance initializations
           invsig1_init = init_struct.invsig1;
           invsig2_init = init_struct.invsig2;
+          sigs_init = [invsig1_init;invsig2_init];
+          
+          % Parse if kE is varying
+          if strcmp(obj.type{2}, 'varying')
+            invsigkE_init = init_struct.invsigkE;
+          elseif strcmp(obj.type{2}, 'constant')
+            invsigkE_init = [];            
+          end
 
           N = length(obj.time);
 
           % Initial values to pass
-          var0 = [kU_init;kE_init;k12_init;k21_init;...
-                  invsig1_init;invsig2_init;...
+          var0 = [rates_init;...
+                  sigs_init;...
                   zeros(2*(N-1), 1)];
           
           % parameters to pass
-          p_val = [obj.time; obj.inj(1:end-1); obj.data(:)];
+          p_val = [invsigkE_init;obj.time; obj.inj(1:end-1); obj.data(:)];
           
           % constraints to pass
           lbx_val = [1e-1;...
-                     1e-6*ones(3, 1);...
-                     1e-3*ones(2,1);...
+                     1e-6*ones(length(rates_init)-1, 1);...
+                     1e-4*ones(length(sigs_init),1);...
                      zeros(2*(N-1), 1)];
           ubx_val = [1e4;...
-                     1e0*ones(3, 1);...
-                     1e3*ones(2,1);...
-                     2.5e2*ones(2*(N-1), 1)];
+                     1e0*ones(length(rates_init)-1, 1);...
+                     1e3*ones(length(sigs_init),1);...
+                     5e2*ones(2*(N-1), 1)];
           lbg_val = zeros(2*(N-1), 1);
           ubg_val = zeros(2*(N-1), 1);
           
@@ -78,20 +86,22 @@ classdef FittingStruct
            
           % save confidence intervals
           sigs = sqrt(diag(cov));
+          kEnames = arrayfun(@(x) sprintf('kE%d', x-1), 1:length(kE_init),...
+                             'UniformOutput', false)';
           T_sol = table;
-          T_sol.names = {'kU';'kE';'k12';'k21';'invsig1';'invsig2'};
-          T_sol.x = full(sol.x(1:6));
+          T_sol.names = [{'kU'};kEnames;{'k12';'k21';'invsig1';'invsig2'}];
+          T_sol.x = full(sol.x(1:n_params));
           T_sol.CI = 1.96*sigs;
           
           % parse solution
           kU_sol = full(sol.x(1));
-          kE_sol = full(sol.x(2));
-          k12_sol = full(sol.x(3));
-          k21_sol = full(sol.x(4));
-          invsig1_sol = full(sol.x(5));
-          invsig2_sol = full(sol.x(6));
+          kE_sol = full(sol.x(2:1+length(kE_init)));
+          k12_sol = full(sol.x(2+length(kE_init)));
+          k21_sol = full(sol.x(3+length(kE_init)));
+          invsig1_sol = full(sol.x(4+length(kE_init)));
+          invsig2_sol = full(sol.x(5+length(kE_init)));
           x_sol = [zeros(1, 2);...
-                   reshape(full(sol.x(7:end)), N-1, 2)];
+                   reshape(full(sol.x(6 + +length(kE_init):end)), N-1, 2)];
 
           sol_struct = struct;
           sol_struct.p = p_val;

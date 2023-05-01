@@ -4,7 +4,7 @@ function [time, injs, y_conc, x_conc] = get_data(true_params, config)
     
     addCompartment(pk_construct, 'Central',...
                    'DosingType', 'Infusion', ...
-                   'EliminationType', 'linear', ...
+                   'EliminationType', config.model_elim, ...
                    'HasResponseVariable', true);
     
     addCompartment(pk_construct, 'Peripheral',...
@@ -22,7 +22,8 @@ function [time, injs, y_conc, x_conc] = get_data(true_params, config)
     important_params = pkmap.Estimated;
     for i = 1:length(modelObj.Parameters)
         current_unit = get(modelObj.Parameters(i), 'Units');
-        new_unit = strrep(current_unit, 'hour', 'minute');
+        new_unit1 = strrep(current_unit, 'hour', 'minute');
+        new_unit = strrep(new_unit1, 'milligram', 'micromole');
         set(modelObj.Parameters(i), 'Units', new_unit);
         is_important = cellfun(@(x) strcmp(x,modelObj.Parameters(i).Name), important_params);
         if ~any(is_important)
@@ -80,10 +81,10 @@ function [time, injs, y_conc, x_conc] = get_data(true_params, config)
     end
     
     % Add noise of particular SNR
-    SNR = 30;
     rng(1)
     noise = normrnd(0, 1, size(x_conc));
     
-    sig_pow = diag(x_conc'*x_conc)/size(x_conc, 1);
-    y_conc = x_conc+noise*sqrt(diag(sig_pow/SNR));
+    mean_error = x_conc - ones(size(x_conc, 1), 1)*mean(x_conc, 1);
+    sig_pow = diag(mean_error'*mean_error)/size(x_conc, 1);
+    y_conc = x_conc+noise*sqrt(diag(sig_pow/config.SNR));
 end
